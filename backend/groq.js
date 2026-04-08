@@ -22,9 +22,10 @@ async function transcribe(audioBuffer, mimetype) {
   const ext = audioMime.includes('mp4') ? 'mp4' : audioMime.includes('wav') ? 'wav' : 'webm';
   const blob = new Blob([audioBuffer], { type: audioMime });
   formData.append('file', blob, `recording.${ext}`);
-  formData.append('model', 'whisper-large-v3');
+  formData.append('model', 'whisper-large-v3-turbo');
   formData.append('language', 'en');
   formData.append('response_format', 'json');
+  formData.append('prompt', 'British English professional workplace conversation, consulting, OT security, KPMG');
 
   const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
     method: 'POST',
@@ -41,6 +42,38 @@ async function transcribe(audioBuffer, mimetype) {
 
   const result = await response.json();
   return result.text;
+}
+
+async function speak(text) {
+  function addEmotionTag(t) {
+    const greetingPattern = /^(hello|hi\b|good morning|morning|right then|brilliant to|lovely to|welcome|alright|great to|good to)/i;
+    if (greetingPattern.test(t.trim())) return `[cheerful] ${t}`;
+    return `[warmly] ${t}`;
+  }
+
+  const taggedText = addEmotionTag(text);
+
+  const response = await fetch('https://api.groq.com/openai/v1/audio/speech', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'playai-tts',
+      voice: 'Nico-PlayAI',
+      input: taggedText,
+      response_format: 'wav',
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Groq TTS error: ${errText}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
 }
 
 async function score(prompt) {
@@ -75,4 +108,4 @@ async function score(prompt) {
   }
 }
 
-module.exports = { chat, transcribe, score };
+module.exports = { chat, transcribe, score, speak };

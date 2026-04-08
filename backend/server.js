@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
-const { chat, transcribe, score } = require('./groq');
+const { chat, transcribe, score, speak } = require('./groq');
 const { buildSystemPrompt, buildConversationContext, compressSession } = require('./alex');
 const { getProfile, updateProfile, saveSession, getSessions } = require('./supabase');
 
@@ -68,13 +68,41 @@ app.post('/api/score', async (req, res) => {
 });
 
 // POST /api/transcribe
-app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
+app.post('/api/transcribe', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No audio file provided' });
     const transcript = await transcribe(req.file.buffer, req.file.mimetype);
     res.json({ transcript });
   } catch (error) {
-    console.error('/api/transcribe error:', error.message);
+    console.error('/api/transcribe error — full details:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/speak
+app.post('/api/speak', async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ error: 'text is required' });
+    const audioBuffer = await speak(text);
+    res.set('Content-Type', 'audio/wav');
+    res.set('Content-Length', audioBuffer.length);
+    res.send(audioBuffer);
+  } catch (error) {
+    console.error('/api/speak error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/speak/test
+app.get('/api/speak/test', async (req, res) => {
+  try {
+    const audioBuffer = await speak("Hello Faisal, I'm Alex, your British English coach. Brilliant to meet you.");
+    res.set('Content-Type', 'audio/wav');
+    res.set('Content-Length', audioBuffer.length);
+    res.send(audioBuffer);
+  } catch (error) {
+    console.error('/api/speak/test error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });

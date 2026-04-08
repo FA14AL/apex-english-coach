@@ -17,7 +17,11 @@ export default function VoiceRecorder({ onTranscript, disabled = false }) {
     setTranscript('');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : 'audio/mp4';
       const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
@@ -29,13 +33,13 @@ export default function VoiceRecorder({ onTranscript, disabled = false }) {
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(chunksRef.current, { type: mimeType });
+        const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+        const audioFile = new File([blob], `recording.${ext}`, { type: mimeType });
         const formData = new FormData();
-        formData.append('audio', blob, `recording.${mimeType.includes('mp4') ? 'mp4' : 'webm'}`);
+        formData.append('file', audioFile);
         setTranscribing(true);
         try {
-          const res = await axios.post('/api/transcribe', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-          });
+          const res = await axios.post('/api/transcribe', formData);
           const text = res.data.transcript || '';
           setTranscript(text);
           if (text) onTranscript(text);
