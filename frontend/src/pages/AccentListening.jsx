@@ -61,20 +61,32 @@ export default function AccentListening() {
   const [comparison, setComparison] = useState(null);
   const [scores, setScores] = useState([]);
   const [allDone, setAllDone] = useState(false);
-  const synthRef = useRef(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const audioRef = useRef(null);
 
   const currentPhrase = PHRASES[currentIndex];
 
-  const speakPhrase = () => {
-    if (!window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(currentPhrase.text);
-    const voices = window.speechSynthesis.getVoices();
-    const gbVoice = voices.find((v) => v.lang === 'en-GB') || voices.find((v) => v.lang.startsWith('en'));
-    if (gbVoice) utter.voice = gbVoice;
-    utter.rate = 1.0;
-    synthRef.current = utter;
-    window.speechSynthesis.speak(utter);
+  const speakPhrase = async () => {
+    if (isSpeaking) return;
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    setIsSpeaking(true);
+    try {
+      const res = await fetch('/api/speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: currentPhrase.text }),
+      });
+      if (!res.ok) throw new Error('TTS failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => { setIsSpeaking(false); URL.revokeObjectURL(url); };
+      audio.onerror = () => setIsSpeaking(false);
+      await audio.play();
+    } catch {
+      setIsSpeaking(false);
+    }
   };
 
   const handleSubmit = () => {
@@ -155,13 +167,24 @@ export default function AccentListening() {
         <p className="text-sm text-gray-500 mb-4">Click to hear the phrase, then type what you heard</p>
         <button
           onClick={speakPhrase}
-          className="w-24 h-24 rounded-full bg-indigo-600 flex items-center justify-center mx-auto hover:bg-indigo-700 active:scale-95 transition-all shadow-lg shadow-indigo-200"
+          disabled={isSpeaking}
+          className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto transition-all shadow-lg shadow-indigo-200 ${isSpeaking ? 'bg-indigo-400 cursor-not-allowed animate-pulse' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95'}`}
         >
-          <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M8 5v14l11-7z" />
-          </svg>
+          {isSpeaking ? (
+            <div className="flex gap-1">
+              {[0,1,2,3].map(i => (
+                <div key={i} className="w-1 bg-white rounded-full" style={{ height: '18px', animation: `speak-pulse 0.7s ease-in-out ${i * 0.1}s infinite` }} />
+              ))}
+            </div>
+          ) : (
+            <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          )}
         </button>
-        <p className="text-xs text-gray-400 mt-3">Phrase plays at natural speed (rate 1.0)</p>
+        <p className="text-xs text-gray-400 mt-3">
+          {isSpeaking ? 'Playing...' : 'Click to hear the phrase at natural British speed'}
+        </p>
       </div>
 
       {/* Input */}

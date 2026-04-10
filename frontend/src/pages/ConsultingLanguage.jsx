@@ -147,15 +147,30 @@ export default function ConsultingLanguage({ userProfile, setUserProfile }) {
     return matchCategory && matchSearch;
   });
 
-  const speakTerm = (text) => {
-    if (!window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    const voices = window.speechSynthesis.getVoices();
-    const gbVoice = voices.find((v) => v.lang === 'en-GB') || voices.find((v) => v.lang.startsWith('en'));
-    if (gbVoice) utter.voice = gbVoice;
-    utter.rate = 0.85;
-    window.speechSynthesis.speak(utter);
+  const speakingRef = useRef(null);
+  const [speakingText, setSpeakingText] = useState('');
+
+  const speakTerm = async (text) => {
+    if (speakingText === text) return;
+    if (speakingRef.current) { speakingRef.current.pause(); speakingRef.current = null; }
+    setSpeakingText(text);
+    try {
+      const res = await fetch('/api/speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) throw new Error('TTS failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      speakingRef.current = audio;
+      audio.onended = () => { setSpeakingText(''); URL.revokeObjectURL(url); };
+      audio.onerror = () => setSpeakingText('');
+      await audio.play();
+    } catch {
+      setSpeakingText('');
+    }
   };
 
   const startPractice = (scenario) => {
@@ -374,10 +389,10 @@ export default function ConsultingLanguage({ userProfile, setUserProfile }) {
                   <div className="flex items-center gap-2 ml-2">
                     <button
                       onClick={(e) => { e.stopPropagation(); speakTerm(p.phrase); }}
-                      className="p-1.5 rounded-lg hover:bg-indigo-50 text-indigo-400"
+                      className={`p-1.5 rounded-lg text-indigo-400 transition-colors ${speakingText === p.phrase ? 'bg-indigo-100 animate-pulse' : 'hover:bg-indigo-50'}`}
                       title="Hear it"
                     >
-                      ▶
+                      {speakingText === p.phrase ? '■' : '▶'}
                     </button>
                     <span className="text-gray-300">{expandedPhrase === i ? '▲' : '▼'}</span>
                   </div>
@@ -434,10 +449,10 @@ export default function ConsultingLanguage({ userProfile, setUserProfile }) {
                       <p className="text-sm font-bold text-gray-800">{t.term}</p>
                       <button
                         onClick={(e) => { e.stopPropagation(); speakTerm(t.term); }}
-                        className="p-1 rounded hover:bg-indigo-50 text-indigo-400 text-xs"
+                        className={`p-1 rounded text-indigo-400 text-xs transition-colors ${speakingText === t.term ? 'bg-indigo-100 animate-pulse' : 'hover:bg-indigo-50'}`}
                         title="Hear pronunciation"
                       >
-                        ▶
+                        {speakingText === t.term ? '■' : '▶'}
                       </button>
                     </div>
                     <p className="text-xs text-indigo-600 mt-0.5">Pronounced: {t.pronounce}</p>

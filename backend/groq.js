@@ -45,14 +45,6 @@ async function transcribe(audioBuffer, mimetype) {
 }
 
 async function speak(text) {
-  function addEmotionTag(t) {
-    const greetingPattern = /^(hello|hi\b|good morning|morning|right then|brilliant to|lovely to|welcome|alright|great to|good to)/i;
-    if (greetingPattern.test(t.trim())) return `[cheerful] ${t}`;
-    return `[warmly] ${t}`;
-  }
-
-  const taggedText = addEmotionTag(text);
-
   const response = await fetch('https://api.groq.com/openai/v1/audio/speech', {
     method: 'POST',
     headers: {
@@ -61,8 +53,8 @@ async function speak(text) {
     },
     body: JSON.stringify({
       model: 'playai-tts',
-      voice: 'Nico-PlayAI',
-      input: taggedText,
+      voice: 'Fritz-PlayAI',
+      input: text,
       response_format: 'wav',
     }),
   });
